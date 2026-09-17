@@ -26,7 +26,8 @@ resources:
             permission: CAN_USE
         - name: lakebase
           database:
-            instance_name: "cerebro-lakebase"     # see resources/lakebase.yml
+            instance_name: "cerebro-lakebase"     # the Lakebase INSTANCE (resources/lakebase.yml)
+            database_name: "databricks_postgres"  # the LOGICAL Postgres db inside it (matches state.py / setup_lakebase.py)
             permission: CAN_CONNECT_AND_CREATE
 
 # How per-customer behavior differs at deploy: NOT via ${var.*} env in app.yaml
