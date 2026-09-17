@@ -189,12 +189,15 @@ print("description:\n ", DESCRIPTION)
 # version + data_sources.tables[].identifier + config.sample_questions.
 # Richer curation (trusted functions, synonyms, join specs, benchmarks) is layered
 # afterward per genie_space.md — those nested shapes aren't part of this baseline.
-serialized_space = json.dumps({
+# NOTE: pass this as a JSON OBJECT (dict) in the request body — the API expects
+# START_OBJECT here. w.api_client.do serializes the whole body, so we must NOT
+# pre-stringify serialized_space (that double-encodes it and the API rejects it).
+serialized_space = {
     "version": 2,
     "config": {"sample_questions": SAMPLE_QUESTIONS},
     "data_sources": {"tables": [{"identifier": ident} for ident in TABLE_IDENTIFIERS]},
-})
-print(serialized_space)
+}
+print(json.dumps(serialized_space, indent=2))
 
 # COMMAND ----------
 
@@ -239,9 +242,9 @@ def create_space():
     try:
         return _api("POST", "/api/2.0/genie/spaces", body=payload)
     except Exception as e:
-        # some API versions reject parent_path — retry without it
-        if "parent_path" in payload:
-            print(f"(create with parent_path failed: {e}; retrying without it)")
+        # only retry without parent_path if THAT is what the API complained about
+        if "parent_path" in payload and "parent_path" in str(e).lower():
+            print(f"(parent_path rejected: {e}; retrying without it)")
             payload.pop("parent_path")
             return _api("POST", "/api/2.0/genie/spaces", body=payload)
         raise
