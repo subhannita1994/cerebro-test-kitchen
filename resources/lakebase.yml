@@ -22,31 +22,28 @@ resources:
       # Smallest capacity is plenty for the workshop's chat memory + snapshot.
       capacity: "CU_1"
 
-  # --- Customer C serving: synced table (reverse-ETL of gold.market_share) ---
-  # Only meaningful when ${var.enable_lakebase_serving} == true. For A/B targets
-  # (serving off), omit this resource by excluding the block via a target override
-  # — or rely on setup_lakebase.py, which no-ops unless serving is enabled.
-  # Verify the resource key + field names against your installed DAB/SDK version;
-  # synced-table fields are still settling (see setup_lakebase.py cell 3).
-  synced_database_tables:
-    market_share_snapshot:
-      name: "${var.catalog}.gold.market_share_snapshot"
-      database_instance_name: "cerebro-lakebase"
-      logical_database_name: "databricks_postgres"
-      spec:
-        source_table_full_name: "${var.catalog}.gold.market_share"
-        primary_key_columns:
-          - period
-          - region
-          - category
-          - brand
-        # SNAPSHOT (one-shot) for the demo; TRIGGERED/CONTINUOUS in production.
-        scheduling_policy: "SNAPSHOT"
-        new_pipeline_spec:
-          storage_catalog: "${var.catalog}"
-          storage_schema: "gold"
-
-# TIP for gating (A): in databricks.yml you can attach this synced table only to
-# the C/dev targets, e.g. under `targets.customer_c.resources.synced_database_tables`
-# (and dev), leaving customer_a / customer_b without it. That keeps ONE codebase
-# while the DAB variable matrix (enable_lakebase_serving) drives what exists.
+# --- Customer C serving: synced table (reverse-ETL of gold.market_share) ---
+# IMPORTANT — do NOT declare the synced table as a deploy-time resource. Its source
+# (${var.catalog}.gold.market_share) is created by the apply_ddl + run_pipeline
+# JOBS, which only run AFTER `bundle deploy`. If the synced table is a bundle
+# resource, `bundle deploy` fails with "schema gold does not exist" (deploy →
+# needs gold → needs the jobs → needs deploy = deadlock).
+#
+# So the synced table is created the IMPERATIVE way: `bundle run setup_lakebase`
+# (src/lakebase/setup_lakebase.py), run AFTER gold is populated (step 6 in the
+# sequence — see setup/03). The declarative block below is kept ONLY as a
+# reference for a production setup where the source table already exists; leave it
+# COMMENTED so it never deploys.
+#
+#  synced_database_tables:
+#    market_share_snapshot:
+#      name: "${var.catalog}.gold.market_share_snapshot"
+#      database_instance_name: "cerebro-lakebase"
+#      logical_database_name: "databricks_postgres"
+#      spec:
+#        source_table_full_name: "${var.catalog}.gold.market_share"
+#        primary_key_columns: [period, region, category, brand]
+#        scheduling_policy: "SNAPSHOT"
+#        new_pipeline_spec:
+#          storage_catalog: "${var.catalog}"
+#          storage_schema: "gold"

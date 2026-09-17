@@ -46,6 +46,24 @@ w = WorkspaceClient()
 who = w.current_user.me().user_name
 print("running as:", who, "(must be the app SP for DDL to succeed)")
 
+# Resolve the Lakebase read/write host from the instance if not supplied. Lets the
+# DAB job pass an empty lakebase_host and avoids a REPLACE_ME. (Attribute name
+# varies slightly across SDK versions, so try a couple; fall back to the widget.)
+if DB_HOST in ("", "REPLACE_ME"):
+    try:
+        inst = w.database.get_database_instance(name=INSTANCE)
+        DB_HOST = (getattr(inst, "read_write_dns", None)
+                   or getattr(inst, "read_write_dns_name", None)
+                   or getattr(inst, "dns_name", None))
+        assert DB_HOST, "instance has no read/write DNS yet (still provisioning?)"
+        print("resolved Lakebase host:", DB_HOST)
+    except Exception as e:
+        raise RuntimeError(
+            f"Could not resolve the Lakebase host for instance '{INSTANCE}' ({e}). "
+            "Set the lakebase_host widget to the instance's read/write host "
+            "(Lakebase UI > the instance > Connection details)."
+        )
+
 # Owner credential: when run-as = app SP, this is the table owner's PG credential
 # (no secrets embedded, no SET ROLE needed).
 cred = w.database.generate_database_credential(

@@ -20,17 +20,31 @@ databricks bundle deploy   -t dev
 ```
 
 This deploys, into `cerebro_dev`, the resources wired in `resources/*.yml`:
-pipelines/jobs (seed, apply_ddl, run_pipeline, register functions), the UC
-functions, the Lakebase instance, and the app.
+the jobs (apply_ddl, seed_data, run_pipeline, register_functions, setup_lakebase),
+the Lakebase **instance**, and the app.
 
-## 2. Apply DDL, run the pipeline, register functions
+> **Deploy must come first, and it must NOT depend on data-plane objects.** The
+> jobs are *created* by `deploy`, so nothing can `bundle run` before deploy. And a
+> resource that references `gold` (e.g. a synced table) can't be a deploy-time
+> resource — `gold` doesn't exist until `apply_ddl` runs. That's why the synced
+> table is created by the `setup_lakebase` **job** (step 2, last), not declared in
+> the bundle. If `deploy` ever errors with *"schema gold does not exist"*, a
+> resource is referencing `gold` too early.
+
+## 2. Run the jobs — in this exact order
 
 ```bash
-databricks bundle run apply_ddl        -t dev   # creates bronze/silver/gold + volume
-databricks bundle run seed_data        -t dev   # (if not already seeded)
-databricks bundle run run_pipeline     -t dev   # Structured Streaming bronze→silver→gold (triggered)
-databricks bundle run register_functions -t dev # f_market_share (+ f_promo_lift since enable_promo=true)
+databricks bundle run apply_ddl          -t dev  # 1. creates bronze/silver/GOLD schemas + volume + empty tables
+databricks bundle run seed_data          -t dev  # 2. generate synthetic source data
+databricks bundle run run_pipeline       -t dev  # 3. Structured Streaming bronze→silver→gold (populates gold)
+databricks bundle run register_functions -t dev  # 4. f_market_share (+ f_promo_lift when enable_promo)
+databricks bundle run setup_lakebase     -t dev  # 5. chat tables (+ synced table now that gold is populated)
 ```
+
+**Order matters:** `apply_ddl` is what makes the `gold` schema exist — every later
+step reads/writes `gold`, so it must be first. `setup_lakebase` must be last (its
+synced table's source is the now-populated `gold.market_share`) and must **run as
+the app service principal** (set the job's *Run as* to the app SP — see setup/03 §4).
 
 Verify gold populated:
 ```sql

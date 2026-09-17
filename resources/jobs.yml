@@ -44,3 +44,22 @@ resources:
               days: "90"
               num_stores: "40"
               num_products: "60"
+
+    # setup_lakebase — chat-memory tables (ALL customers) + (serving on) the OLTP
+    # watchlist + the market_share_snapshot SYNCED table. Run this LAST, AFTER
+    # run_pipeline has populated gold (the synced table's source). It must run AS
+    # THE APP SERVICE PRINCIPAL (the Postgres table owner) — set this job's
+    # "Run as" to the app SP in the Jobs UI, or run the notebook from the app's
+    # context. The notebook resolves the Lakebase host from the instance name.
+    setup_lakebase:
+      name: "[${bundle.target}] cerebro setup_lakebase (${var.catalog})"
+      tasks:
+        - task_key: setup_lakebase
+          notebook_task:
+            notebook_path: ../src/lakebase/setup_lakebase.py
+            base_parameters:
+              catalog: ${var.catalog}
+              lakebase_instance: "cerebro-lakebase"
+              lakebase_host: ""                            # blank => notebook resolves it from the instance
+              lakebase_database: "databricks_postgres"
+              enable_lakebase_serving: ${var.enable_lakebase_serving}
