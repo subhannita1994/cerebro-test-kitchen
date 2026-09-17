@@ -59,6 +59,7 @@ assert WAREHOUSE, "warehouse_id is required (Genie needs a serverless SQL wareho
 import json
 import os
 import re
+import uuid
 
 import requests
 from databricks.sdk import WorkspaceClient
@@ -190,24 +191,23 @@ print("description:\n ", DESCRIPTION)
 # version + data_sources.tables[].identifier + config.sample_questions.
 # Richer curation (trusted functions, synonyms, join specs, benchmarks) is layered
 # afterward per genie_space.md — those nested shapes aren't part of this baseline.
-# serialized_space is a v2 structure. Note the exact element shapes (this is what
-# the API validates — a plain string where an object is expected is the
-# "Expected START_OBJECT not VALUE_STRING" error):
-#   config.sample_questions[] = {"id": <str>, "question": [<str>]}   (question is an ARRAY)
-#   data_sources.tables[]     = {"identifier": "catalog.schema.table", ...}
-# We build it as a dict here and json.dumps() it into the request body below —
-# the API's `serialized_space` field is a STRING containing this JSON object,
-# single-encoded on the wire.
+# serialized_space (v2) — sent as a single-encoded JSON STRING in the request body
+# (json.dumps below). Validation rules per the docs
+# (.../genie-agents/conversation-api#validation-rules-for-serialized_space):
+#   - EVERY `id` = 32-char LOWERCASE HEX (a UUID with hyphens removed) -> uuid4().hex
+#   - config.sample_questions[] = {"id", "question": [<str>]}, SORTED BY id
+#   - data_sources.tables[]     = {"identifier": "catalog.schema.table"}, SORTED BY identifier
+# Baseline is intentionally minimal (tables + sample questions). Richer instructions
+# / benchmarks (each element also needs its own hex id + per-collection sort) are
+# layered later per genie_space.md.
+_sample_qs = sorted(
+    ({"id": uuid.uuid4().hex, "question": [q]} for q in SAMPLE_QUESTIONS),
+    key=lambda e: e["id"],
+)
 serialized_space = {
     "version": 2,
-    "config": {
-        "sample_questions": [
-            {"id": f"q{i + 1}", "question": [q]} for i, q in enumerate(SAMPLE_QUESTIONS)
-        ]
-    },
+    "config": {"sample_questions": _sample_qs},
     "data_sources": {
-        # API requires tables sorted by identifier (else: "data_sources.tables
-        # must be sorted by identifier").
         "tables": [{"identifier": ident} for ident in sorted(TABLE_IDENTIFIERS)]
     },
 }
