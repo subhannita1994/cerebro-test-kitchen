@@ -206,7 +206,9 @@ serialized_space = {
         ]
     },
     "data_sources": {
-        "tables": [{"identifier": ident} for ident in TABLE_IDENTIFIERS]
+        # API requires tables sorted by identifier (else: "data_sources.tables
+        # must be sorted by identifier").
+        "tables": [{"identifier": ident} for ident in sorted(TABLE_IDENTIFIERS)]
     },
 }
 print(json.dumps(serialized_space, indent=2))
