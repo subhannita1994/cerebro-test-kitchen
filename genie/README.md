@@ -33,12 +33,23 @@ swimlane). Then, per customer:
 4. Load the **benchmark Q&A** into the Benchmarks tab and run a baseline score.
 5. Copy the space id into the bundle as `${var.genie_space_id}` for that target.
 
-### Option B — API / SDK (repeatable across catalogs)
-Use the Genie management API / `databricks-genie` skill to create the space, add
-data sources + instructions, and register trusted assets programmatically, reading
-the fields from `genie_space.md`. Parameterize `${catalog}` so the same script
-produces the A/B/C spaces. Export a tuned space and re-import it into another
-catalog to clone curation. Store each resulting space id against its target.
+### Option B — genie-as-code job (repeatable across catalogs)
+Run the **`create_genie_space`** DABs job — `create_genie_space.py` calls the Genie
+API (`WorkspaceClient.genie.create_space`), reads this `genie_space.md` for the
+sample questions + instruction block, and creates the space over `${catalog}.gold`
+with the right per-customer tables:
+
+```bash
+databricks bundle run create_genie_space -t dev          # (or -t customer_a|b|c)
+```
+
+It's idempotent (reuses a same-title space) and **prints the `space_id`** to paste
+into `src/app/config/<customer>.yaml` (`genie_space_id`). Same code → A/B/C spaces
+by changing the target. It creates the API-supported baseline (tables + sample
+questions + instructions); layer the richer curation (trusted-asset functions,
+synonyms/entity matching, join specs, benchmark Q&A) on top in the UI, or via the
+`databricks-genie` skill's export→edit→import, per this file. Store each resulting
+space id against its target.
 
 > **Import/migrate between workspaces or catalogs:** export the space definition,
 > find-and-replace the catalog name, and import into the target. The

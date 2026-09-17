@@ -53,17 +53,26 @@ SELECT * FROM cerebro_dev.gold.promo_performance LIMIT 20;
 SELECT * FROM cerebro_dev.gold.f_market_share('Breads','Midwest','2026-08');
 ```
 
-## 3. Create the Genie space + Unity AI Gateway model (one-time)
+## 3. Create the Genie space, then wire the model + Genie into config
 
-- **Genie space** over `cerebro_dev.gold` — use `genie/genie_space.md` for the
-  instructions, sample questions, and certified answers. Copy the space ID into
-  the customer's `src/app/config/<customer>.yaml` (`genie_space_id`).
-- **Unity AI Gateway model service** fronting Databricks-hosted Claude Sonnet —
-  create it as a UC model service (the GA AI Gateway, not legacy serving). Copy
-  its FQN into `src/app/config/<customer>.yaml` (`claude_model`). The app calls
-  `POST {host}/ai-gateway/mlflow/v1/chat/completions` with this model.
-- Grant the **persona SPs `CAN QUERY`** on this model service (they couldn't be
-  granted earlier — the model didn't exist until now).
+**Create the Genie space FIRST** — you can't put a `genie_space_id` in the config
+until the space exists. Run the genie-as-code job (it builds the space over
+`cerebro_dev.gold` from `genie/genie_space.md` and **prints the `space_id`**):
+
+```bash
+databricks bundle run create_genie_space -t dev
+```
+
+Then wire `src/app/config/dev.yaml`:
+- `genie_space_id:` → the id the job printed.
+- `claude_model: system.ai.claude-sonnet-4-5` → the ready-to-use **Unity AI
+  Gateway** FQN. Nothing to create; the app calls
+  `POST {host}/ai-gateway/mlflow/v1/chat/completions` with this model. (Only build
+  your *own* model service if you want a dedicated inference table / guardrails —
+  that's the Module 4 governance exercise.)
+- Grant the **persona SPs `CAN QUERY`** on the model (Catalog Explorer → `system` →
+  `ai` → the model → Permissions), and enrich the Genie space in the UI per
+  `genie/genie_space.md` (trusted functions, synonyms, benchmarks).
 
 ## 4. Grant the service principals (post-deploy)
 

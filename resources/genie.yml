@@ -1,0 +1,32 @@
+# =============================================================================
+# resources/genie.yml — genie-as-code job (ALL customers)
+# -----------------------------------------------------------------------------
+# Included by databricks.yml. Creates the Cerebro Market Analytics Genie space
+# for ${var.catalog} via the Genie API (genie/create_genie_space.py), reading the
+# buildable contract in genie/genie_space.md.
+#
+# Run it AFTER the gold tables exist and are populated (the create call validates
+# the referenced tables):
+#     apply_ddl -> seed_data -> run_pipeline -> register_functions -> create_genie_space
+#
+# The job PRINTS the resulting space_id — copy it into
+# src/app/config/<customer>.yaml (genie_space_id), then re-deploy the app.
+# Serverless notebook task. Genie itself needs a serverless SQL warehouse
+# (${var.warehouse_id}).
+# =============================================================================
+
+resources:
+  jobs:
+
+    create_genie_space:
+      name: "[${bundle.target}] cerebro create_genie_space (${var.catalog})"
+      tasks:
+        - task_key: create_genie_space
+          notebook_task:
+            notebook_path: ../genie/create_genie_space.py
+            base_parameters:
+              catalog: ${var.catalog}
+              customer_slug: ${var.customer_slug}
+              warehouse_id: ${var.warehouse_id}
+              parent_path: ""              # blank => the runner's home folder
+              recreate_if_exists: "false"  # idempotent: reuse an existing same-title space
