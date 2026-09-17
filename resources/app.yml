@@ -1,0 +1,36 @@
+# DAB resource — the Cerebro Databricks App (included by databricks.yml).
+#
+# One app image, four targets. The app name is suffixed with the customer SLUG
+# (dev|a|b|c) — hyphen-safe, NO underscores (app names reject '_'), and it is the
+# runtime signal the app resolves its config from: customer_config.py parses
+# DATABRICKS_APP_NAME = "cerebro-assistant-<slug>" to pick src/app/config/<file>.
+# ${var.customer_slug} is set per target in databricks.yml (dev=dev, customer_a=a, …).
+resources:
+  apps:
+    cerebro_assistant:
+      name: "cerebro-assistant-${var.customer_slug}"
+      description: "Cerebro — config-driven market-analytics assistant (Claude via Unity AI Gateway + Genie + UC functions + Lakebase)."
+      # Source synced from the repo; src/app/app.yaml is the runtime config, and
+      # src/app/config/*.yaml carries the per-customer runtime settings.
+      source_code_path: ../src/app
+
+      # App resources become available to the app principal at runtime.
+      #   * sql-warehouse: runs the UC-function tools + turn-log writes, and is
+      #     surfaced to the app as env WAREHOUSE_ID via `valueFrom: "sql-warehouse"`
+      #     in src/app/app.yaml (the names MUST match).
+      #   * lakebase: backs chat memory (+ Customer-C serving).
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: "${var.warehouse_id}"
+            permission: CAN_USE
+        - name: lakebase
+          database:
+            instance_name: "cerebro-lakebase"     # see resources/lakebase.yml
+            permission: CAN_CONNECT_AND_CREATE
+
+# How per-customer behavior differs at deploy: NOT via ${var.*} env in app.yaml
+# (the bundle can't substitute those there). Deploying `-t customer_b` names the
+# app `cerebro-assistant-b`; at startup customer_config.py resolves that to
+# src/app/config/customer_b.yaml -> get_promo_lift absent, serving off. `-t
+# customer_c` -> `cerebro-assistant-c` -> customer_c.yaml -> Lakebase tools on.

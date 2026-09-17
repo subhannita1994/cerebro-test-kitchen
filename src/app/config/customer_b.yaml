@@ -1,0 +1,16 @@
+# Customer B — omnichannel schema, NO promotions data. Full AI features EXCEPT
+# get_promo_lift (cerebro_b has no promo_performance table, so the tool is gated
+# off in config — not in code). Resolved from DATABRICKS_APP_NAME=cerebro-assistant-b.
+customer: B
+display_name: "Customer B — Omnichannel Analytics"
+catalog: cerebro_b
+claude_model: "REPLACE_ME"          # UC Gateway model FQN (set in setup/03)
+genie_space_id: "REPLACE_ME"        # Genie space id over cerebro_b.gold
+enable_lakebase_serving: false
+lakebase_instance: cerebro-lakebase
+lakebase_host: "REPLACE_ME"         # <instance>.database.<region>.cloud.databricks.com
+lakebase_database: databricks_postgres
+tools:
+  - query_genie        # sees omnichannel (in-store + online) sales
+  - get_market_share   # UC function cerebro_b.gold.f_market_share
+  # get_promo_lift intentionally omitted: no promotions data in cerebro_b.

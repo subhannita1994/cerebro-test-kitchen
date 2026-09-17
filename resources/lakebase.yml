@@ -1,0 +1,52 @@
+# DAB resource — Lakebase (managed Postgres) for the Cerebro app.
+#
+# The database INSTANCE backs chat memory for ALL customers (users / threads /
+# messages / agent_state). Customer C additionally gets a SYNCED table
+# (market_share_snapshot) for sub-second serving of the market_share mart.
+#
+# Gating on ${var.enable_lakebase_serving}: DAB has no per-resource `if`, so the
+# synced table is gated in one of two supported ways (pick per workshop):
+#   (A) Deploy-time (declarative): keep the synced_database_tables block below in
+#       this file ONLY for the customer_c / dev targets. The clean way to do that
+#       is a target-scoped override — the block is defined here but points at
+#       ${var.catalog}.gold.market_share, which only exists (with promo/altlogic)
+#       for C/dev; for A/B you would remove/omit this include. See the note below.
+#   (B) Job-time (imperative): leave the synced table OUT of the bundle and create
+#       it from src/lakebase/setup_lakebase.py, run only for the C target.
+# The reference build uses the setup notebook (B) as the primary path and keeps
+# the declarative block (A) here as the documented alternative.
+resources:
+  database_instances:
+    cerebro_lakebase:
+      name: "cerebro-lakebase"
+      # Smallest capacity is plenty for the workshop's chat memory + snapshot.
+      capacity: "CU_1"
+
+  # --- Customer C serving: synced table (reverse-ETL of gold.market_share) ---
+  # Only meaningful when ${var.enable_lakebase_serving} == true. For A/B targets
+  # (serving off), omit this resource by excluding the block via a target override
+  # — or rely on setup_lakebase.py, which no-ops unless serving is enabled.
+  # Verify the resource key + field names against your installed DAB/SDK version;
+  # synced-table fields are still settling (see setup_lakebase.py cell 3).
+  synced_database_tables:
+    market_share_snapshot:
+      name: "${var.catalog}.gold.market_share_snapshot"
+      database_instance_name: "cerebro-lakebase"
+      logical_database_name: "databricks_postgres"
+      spec:
+        source_table_full_name: "${var.catalog}.gold.market_share"
+        primary_key_columns:
+          - period
+          - region
+          - category
+          - brand
+        # SNAPSHOT (one-shot) for the demo; TRIGGERED/CONTINUOUS in production.
+        scheduling_policy: "SNAPSHOT"
+        new_pipeline_spec:
+          storage_catalog: "${var.catalog}"
+          storage_schema: "gold"
+
+# TIP for gating (A): in databricks.yml you can attach this synced table only to
+# the C/dev targets, e.g. under `targets.customer_c.resources.synced_database_tables`
+# (and dev), leaving customer_a / customer_b without it. That keeps ONE codebase
+# while the DAB variable matrix (enable_lakebase_serving) drives what exists.

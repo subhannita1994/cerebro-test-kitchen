@@ -1,0 +1,32 @@
+# =============================================================================
+# resources/pipelines.yml — the streaming pipeline job (ALL customers)
+# -----------------------------------------------------------------------------
+# Included by databricks.yml. NOTE: these are Spark STRUCTURED STREAMING jobs
+# (readStream/writeStream + Auto Loader), NOT Lakeflow Declarative Pipelines, so
+# they are modeled as a serverless JOB rather than a `pipelines:` resource.
+#
+# The run_pipeline job runs the ONE code module selected by ${var.pipeline_variant}
+# — the variant name maps 1:1 to the directory under src/pipelines/, so the path
+# is interpolated directly:
+#     baseline    -> src/pipelines/baseline/pipeline.py     (dev / Customer A)
+#     omnichannel -> src/pipelines/omnichannel/pipeline.py  (Customer B)
+#     altlogic    -> src/pipelines/altlogic/pipeline.py     (Customer C)
+#
+# Each module runs TRIGGERED (availableNow) so the streams drain the backlog and
+# the job task TERMINATES — workshop-friendly, not a forever-running stream.
+# Serverless: notebook task with no cluster. Run AFTER apply_ddl + seed_data.
+# =============================================================================
+
+resources:
+  jobs:
+
+    run_pipeline:
+      name: "[${bundle.target}] cerebro run_pipeline (${var.pipeline_variant} -> ${var.catalog})"
+      tasks:
+        - task_key: run_pipeline
+          notebook_task:
+            # ${var.pipeline_variant} in {baseline, omnichannel, altlogic} — the
+            # directory name matches the variant, so this selects the module.
+            notebook_path: ../src/pipelines/${var.pipeline_variant}/pipeline.py
+            base_parameters:
+              catalog: ${var.catalog}

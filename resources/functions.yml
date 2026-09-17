@@ -1,0 +1,31 @@
+# =============================================================================
+# resources/functions.yml — UC function registration job (ALL customers)
+# -----------------------------------------------------------------------------
+# Included by databricks.yml. One serverless job that registers the UC SQL
+# functions the AI swimlane's tools call:
+#   * ${catalog}.gold.f_market_share  — ALWAYS.
+#   * ${catalog}.gold.f_promo_lift    — ONLY when ${var.enable_promo}=true
+#                                        (Customers A/C + dev; NOT Customer B).
+#
+# The register_functions runner (src/functions/register_functions.py) reads the
+# .sql files under src/functions/, substitutes ${catalog}, and executes them via
+# spark.sql (CREATE OR REPLACE => idempotent). Passing enable_promo=false makes
+# the runner SKIP f_promo_lift entirely, matching config/customer_b.yaml.
+#
+# Serverless: notebook task with no cluster. Run AFTER run_pipeline has built the
+# gold tables the functions read.
+# =============================================================================
+
+resources:
+  jobs:
+
+    register_functions:
+      name: "[${bundle.target}] cerebro register_functions (${var.catalog})"
+      tasks:
+        - task_key: register_functions
+          notebook_task:
+            notebook_path: ../src/functions/register_functions.py
+            base_parameters:
+              catalog: ${var.catalog}
+              enable_promo: ${var.enable_promo}
+              functions_root: ""     # blank => runner auto-locates src/functions/

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Databricks Asset Bundles
+.databricks/
+bundle.tf.json
+
+# Local overrides / secrets (never commit real IDs or creds)
+*.local.yml
+*.local.yaml
+.env
+
+# OS
+.DS_Store

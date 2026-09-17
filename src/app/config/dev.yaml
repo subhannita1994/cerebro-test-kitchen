@@ -1,0 +1,18 @@
+# Dev — reference build (everything on). Resolved at runtime by customer_config.py
+# from DATABRICKS_APP_NAME=cerebro-assistant-dev (or CEREBRO_CUSTOMER=dev locally).
+# This file is BUNDLED inside src/app/ so it is reachable at app runtime.
+customer: DEV
+display_name: "Dev — Reference Build (all features)"
+catalog: cerebro_dev
+claude_model: "REPLACE_ME"          # UC Gateway model FQN (set in setup/03)
+genie_space_id: "REPLACE_ME"        # Genie space id over cerebro_dev.gold
+enable_lakebase_serving: true
+lakebase_instance: cerebro-lakebase
+lakebase_host: "REPLACE_ME"         # <instance>.database.<region>.cloud.databricks.com
+lakebase_database: databricks_postgres
+tools:
+  - query_genie
+  - get_market_share
+  - get_promo_lift
+  - get_top_movers      # Lakebase synced snapshot (serving on)
+  - save_to_watchlist   # Lakebase OLTP watchlist (serving on)

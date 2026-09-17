@@ -1,0 +1,28 @@
+# Databricks Apps runtime config for the Cerebro assistant (Streamlit).
+#
+# IMPORTANT: Databricks Apps read this env as STATIC values — the bundle does
+# NOT substitute ${var.*} inside app.yaml, and only this src/app/ folder is
+# deployed. So per-customer behavior is NOT carried by env here. Instead each
+# target's full config is BUNDLED under src/app/config/*.yaml and resolved at
+# runtime by customer_config.py from DATABRICKS_APP_NAME (cerebro-assistant-<slug>).
+#
+# Env below is only the handful of values that are genuinely static or runtime-
+# injected:
+#   * WAREHOUSE_ID  — injected from the app's sql-warehouse resource (valueFrom),
+#     so it's the real warehouse id at runtime (see resources/app.yml).
+#   * SECRET_SCOPE  — static; holds the persona SP OAuth credentials.
+# DATABRICKS_HOST and DATABRICKS_CLIENT_ID are auto-injected by the Apps runtime.
+
+command: ["streamlit", "run", "app.py", "--server.port", "8000", "--server.address", "0.0.0.0"]
+
+env:
+  - name: WAREHOUSE_ID
+    valueFrom: "sql-warehouse"     # app resource name in resources/app.yml
+  - name: SECRET_SCOPE
+    value: "cerebro_demo"
+
+  # Local-dev ONLY: force a customer without a deployed app name. Accepts a slug
+  # in {dev, a, b, c}. The DEPLOYED app ignores this and resolves the customer
+  # from DATABRICKS_APP_NAME (cerebro-assistant-<slug>). Leave commented in the repo.
+  # - name: CEREBRO_CUSTOMER
+  #   value: "a"

@@ -1,0 +1,15 @@
+# Customer A — full AI features (all 3 UC/Genie tools, no Lakebase serving).
+# Resolved from DATABRICKS_APP_NAME=cerebro-assistant-a (or CEREBRO_CUSTOMER=a).
+customer: A
+display_name: "Customer A — Full Market Analytics"
+catalog: cerebro_a
+claude_model: "REPLACE_ME"          # UC Gateway model FQN (set in setup/03)
+genie_space_id: "REPLACE_ME"        # Genie space id over cerebro_a.gold
+enable_lakebase_serving: false
+lakebase_instance: cerebro-lakebase
+lakebase_host: "REPLACE_ME"         # <instance>.database.<region>.cloud.databricks.com
+lakebase_database: databricks_postgres
+tools:
+  - query_genie        # always on: open-ended NL analytics over gold
+  - get_market_share   # UC function cerebro_a.gold.f_market_share
+  - get_promo_lift     # UC function cerebro_a.gold.f_promo_lift

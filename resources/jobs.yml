@@ -1,0 +1,46 @@
+# =============================================================================
+# resources/jobs.yml — DAB jobs for schema-as-code + seed data (ALL customers)
+# -----------------------------------------------------------------------------
+# Included by databricks.yml. Two serverless, TRIGGERED (run-to-completion) jobs:
+#
+#   apply_ddl  — runs src/pipelines/apply_ddl.py against ${var.catalog}; applies
+#                the Customer B overlay when pipeline_variant == omnichannel.
+#   seed_data  — runs src/data_gen/generate_market_data.py to land source files
+#                (or bronze tables) for ${var.catalog}. Promotions land only when
+#                enable_promo; online orders land only for the omnichannel variant
+#                (derived from pipeline_variant inside the generator).
+#
+# Serverless: notebook tasks with no cluster => serverless compute. Notebook
+# params are passed as base_parameters (read via dbutils.widgets in each script).
+# Typical workshop order: apply_ddl -> seed_data -> run_pipeline (pipelines.yml)
+# -> register_functions (functions.yml).
+# =============================================================================
+
+resources:
+  jobs:
+
+    apply_ddl:
+      name: "[${bundle.target}] cerebro apply_ddl (${var.catalog})"
+      tasks:
+        - task_key: apply_ddl
+          notebook_task:
+            notebook_path: ../src/pipelines/apply_ddl.py
+            base_parameters:
+              catalog: ${var.catalog}
+              pipeline_variant: ${var.pipeline_variant}
+              ddl_root: ""          # blank => runner auto-locates ddl/ from repo root
+
+    seed_data:
+      name: "[${bundle.target}] cerebro seed_data (${var.catalog})"
+      tasks:
+        - task_key: seed_data
+          notebook_task:
+            notebook_path: ../src/data_gen/generate_market_data.py
+            base_parameters:
+              catalog: ${var.catalog}
+              include_promotions: ${var.enable_promo}
+              pipeline_variant: ${var.pipeline_variant}   # generator derives online orders from this
+              mode: files                                 # land JSON for Auto Loader
+              days: "90"
+              num_stores: "40"
+              num_products: "60"

@@ -1,0 +1,92 @@
+# Cerebro Test Kitchen — one bundle, four targets (dev + customers A/B/C).
+# Targets map to CATALOGS in the single shared training workspace (not to
+# separate workspaces). `databricks bundle deploy -t customer_a` assembles the
+# streaming pipelines + UC functions + app + Lakebase and deploys them all into
+# catalog `cerebro_a`. See CONTRACT.md for the full data model + variable matrix.
+#
+# IMPORTANT — how per-customer APP behavior is injected (verified against the
+# Databricks Apps + DABs contract): a Databricks App reads its env from its OWN
+# `src/app/app.yaml`, and `${var.*}` is NOT substituted inside that source file.
+# So the app does NOT get per-target values from bundle variables. Instead the
+# app resolves its customer at runtime from the auto-injected DATABRICKS_APP_NAME
+# and loads a BUNDLED per-customer file `src/app/config/<customer>.yaml`
+# (catalog, claude_model, genie_space_id, enabled tools, Lakebase flags). The
+# bundle variables below drive the DATA resources (jobs/pipelines/functions,
+# where ${var.*} IS substituted) and the app's name/slug.
+bundle:
+  name: cerebro-test-kitchen
+
+variables:
+  catalog:
+    description: Target catalog for all UC objects (one per customer).
+  customer_slug:
+    description: Hyphen-safe slug for the app name (dev|a|b|c). App names can't contain underscores.
+    default: "dev"
+  warehouse_id:
+    description: SQL warehouse ID used for DDL, UC functions, and the app's UC-function tools.
+    default: "REPLACE_ME"          # set per workspace in setup/01
+  secret_scope:
+    description: Secret scope holding persona SP credentials.
+    default: "cerebro_demo"
+  enable_promo:
+    description: Deploy the promotions pipeline + f_promo_lift function (data side).
+    default: true
+  pipeline_variant:
+    description: Streaming code module — baseline | omnichannel | altlogic.
+    default: "baseline"
+  enable_lakebase_serving:
+    description: Customer C — Lakebase synced snapshot + OLTP watchlist (gates the setup_lakebase job's synced-table step).
+    default: false
+
+include:
+  - resources/*.yml
+
+# All customers live in ONE workspace; only the catalog + variables change.
+# NOTE: the per-customer app runtime config (claude_model, genie_space_id, tools,
+# lakebase host) lives in src/app/config/<customer>.yaml — fill those once the
+# Genie space + Gateway model + Lakebase instance exist (setup/03).
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: cerebro_dev
+      customer_slug: dev
+      enable_promo: true
+      pipeline_variant: baseline
+      enable_lakebase_serving: true
+    workspace:
+      host: https://REPLACE_ME.cloud.databricks.com
+
+  customer_a:
+    mode: production
+    variables:
+      catalog: cerebro_a
+      customer_slug: a
+      enable_promo: true
+      pipeline_variant: baseline
+      enable_lakebase_serving: false
+    workspace:
+      host: https://REPLACE_ME.cloud.databricks.com
+
+  customer_b:
+    mode: production
+    variables:
+      catalog: cerebro_b
+      customer_slug: b
+      enable_promo: false
+      pipeline_variant: omnichannel
+      enable_lakebase_serving: false
+    workspace:
+      host: https://REPLACE_ME.cloud.databricks.com
+
+  customer_c:
+    mode: production
+    variables:
+      catalog: cerebro_c
+      customer_slug: c
+      enable_promo: true
+      pipeline_variant: altlogic
+      enable_lakebase_serving: true
+    workspace:
+      host: https://REPLACE_ME.cloud.databricks.com

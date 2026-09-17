@@ -1,0 +1,18 @@
+# Customer C — same schema as A (alt market-share methodology) PLUS the Lakebase
+# feature: sub-second serving from a synced snapshot + an OLTP watchlist the chat
+# writes to. All 5 tools. Resolved from DATABRICKS_APP_NAME=cerebro-assistant-c.
+customer: C
+display_name: "Customer C — Analytics + Lakebase Serving"
+catalog: cerebro_c
+claude_model: "REPLACE_ME"          # UC Gateway model FQN (set in setup/03)
+genie_space_id: "REPLACE_ME"        # Genie space id over cerebro_c.gold
+enable_lakebase_serving: true
+lakebase_instance: cerebro-lakebase
+lakebase_host: "REPLACE_ME"         # <instance>.database.<region>.cloud.databricks.com
+lakebase_database: databricks_postgres
+tools:
+  - query_genie
+  - get_market_share
+  - get_promo_lift
+  - get_top_movers     # reads Lakebase synced snapshot market_share_snapshot (sub-second)
+  - save_to_watchlist  # writes Lakebase OLTP table watchlist
