@@ -190,13 +190,24 @@ print("description:\n ", DESCRIPTION)
 # version + data_sources.tables[].identifier + config.sample_questions.
 # Richer curation (trusted functions, synonyms, join specs, benchmarks) is layered
 # afterward per genie_space.md — those nested shapes aren't part of this baseline.
-# NOTE: pass this as a JSON OBJECT (dict) in the request body — the API expects
-# START_OBJECT here. w.api_client.do serializes the whole body, so we must NOT
-# pre-stringify serialized_space (that double-encodes it and the API rejects it).
+# serialized_space is a v2 structure. Note the exact element shapes (this is what
+# the API validates — a plain string where an object is expected is the
+# "Expected START_OBJECT not VALUE_STRING" error):
+#   config.sample_questions[] = {"id": <str>, "question": [<str>]}   (question is an ARRAY)
+#   data_sources.tables[]     = {"identifier": "catalog.schema.table", ...}
+# We build it as a dict here and json.dumps() it into the request body below —
+# the API's `serialized_space` field is a STRING containing this JSON object,
+# single-encoded on the wire.
 serialized_space = {
     "version": 2,
-    "config": {"sample_questions": SAMPLE_QUESTIONS},
-    "data_sources": {"tables": [{"identifier": ident} for ident in TABLE_IDENTIFIERS]},
+    "config": {
+        "sample_questions": [
+            {"id": f"q{i + 1}", "question": [q]} for i, q in enumerate(SAMPLE_QUESTIONS)
+        ]
+    },
+    "data_sources": {
+        "tables": [{"identifier": ident} for ident in TABLE_IDENTIFIERS]
+    },
 }
 print(json.dumps(serialized_space, indent=2))
 
