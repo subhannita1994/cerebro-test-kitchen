@@ -60,6 +60,7 @@ import json
 import os
 import re
 
+import requests
 from databricks.sdk import WorkspaceClient
 
 w = WorkspaceClient()
@@ -231,22 +232,36 @@ def find_existing_space_id(title: str):
     return None
 
 def create_space():
-    payload = {
-        "warehouse_id": WAREHOUSE,
-        "title": TITLE,
-        "description": DESCRIPTION,
-        "serialized_space": serialized_space,
-    }
-    if PARENT:
-        payload["parent_path"] = PARENT
+    # `serialized_space` is a STRING field whose CONTENT must be a JSON object,
+    # single-encoded on the wire. We build the request with `requests` (not
+    # api_client.do, which re-encoded the value and produced a double-encoded
+    # string). requests' json= serializes the body once, so serialized_space ends
+    # up as one JSON string literal containing the object — exactly what the API
+    # wants ("String field" + valid-JSON-object content).
+    host = w.config.host.rstrip("/")
+    headers = {**(w.config.authenticate() or {}), "Content-Type": "application/json"}
+
+    def _post(include_parent: bool):
+        body = {
+            "warehouse_id": WAREHOUSE,
+            "title": TITLE,
+            "description": DESCRIPTION,
+            "serialized_space": json.dumps(serialized_space),   # single-encoded JSON string
+        }
+        if include_parent and PARENT:
+            body["parent_path"] = PARENT
+        r = requests.post(f"{host}/api/2.0/genie/spaces", headers=headers, json=body, timeout=90)
+        if not r.ok:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:500]}")
+        return r.json()
+
     try:
-        return _api("POST", "/api/2.0/genie/spaces", body=payload)
+        return _post(include_parent=True)
     except Exception as e:
         # only retry without parent_path if THAT is what the API complained about
-        if "parent_path" in payload and "parent_path" in str(e).lower():
+        if PARENT and "parent_path" in str(e).lower():
             print(f"(parent_path rejected: {e}; retrying without it)")
-            payload.pop("parent_path")
-            return _api("POST", "/api/2.0/genie/spaces", body=payload)
+            return _post(include_parent=False)
         raise
 
 existing_id = find_existing_space_id(TITLE)
