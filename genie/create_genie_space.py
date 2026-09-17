@@ -198,18 +198,53 @@ print(serialized_space)
 
 # COMMAND ----------
 
-# --- Idempotent create: find an existing space by title, else create ----------
+# --- Idempotent create via the REST API -------------------------------------
+# The SDK's genie.create_space isn't present on every SDK version, so we call the
+# REST endpoint directly through w.api_client.do — version-independent.
+#   list:   GET    /api/2.0/genie/spaces         -> {"spaces":[...], "next_page_token"}
+#   create: POST   /api/2.0/genie/spaces         -> {"space_id": ...}
+#   delete: DELETE /api/2.0/genie/spaces/{id}
+def _api(method, path, body=None):
+    return w.api_client.do(method, path, body=body) or {}
+
+def _space_name(s: dict):
+    return s.get("title") or s.get("display_name") or s.get("name")
+
 def find_existing_space_id(title: str):
     try:
-        spaces = w.genie.list_spaces()
-        items = getattr(spaces, "spaces", None) or list(spaces)
-        for s in items:
-            name = getattr(s, "title", None) or getattr(s, "display_name", None)
-            if name == title:
-                return getattr(s, "space_id", None) or getattr(s, "id", None)
+        token, seen = None, 0
+        while True:
+            path = "/api/2.0/genie/spaces" + (f"?page_token={token}" if token else "")
+            resp = _api("GET", path)
+            for s in (resp.get("spaces") or []):
+                if _space_name(s) == title:
+                    return s.get("space_id") or s.get("id")
+            token = resp.get("next_page_token")
+            seen += 1
+            if not token or seen > 20:
+                break
     except Exception as e:
         print(f"(could not list existing spaces: {e})")
     return None
+
+def create_space():
+    payload = {
+        "warehouse_id": WAREHOUSE,
+        "title": TITLE,
+        "description": DESCRIPTION,
+        "serialized_space": serialized_space,
+    }
+    if PARENT:
+        payload["parent_path"] = PARENT
+    try:
+        return _api("POST", "/api/2.0/genie/spaces", body=payload)
+    except Exception as e:
+        # some API versions reject parent_path — retry without it
+        if "parent_path" in payload:
+            print(f"(create with parent_path failed: {e}; retrying without it)")
+            payload.pop("parent_path")
+            return _api("POST", "/api/2.0/genie/spaces", body=payload)
+        raise
 
 existing_id = find_existing_space_id(TITLE)
 
@@ -220,20 +255,15 @@ if existing_id and not RECREATE:
 else:
     if existing_id and RECREATE:
         try:
-            w.genie.delete_space(existing_id)  # SDK method name may vary by version
+            _api("DELETE", f"/api/2.0/genie/spaces/{existing_id}")
             print(f"deleted existing space {existing_id}")
         except Exception as e:
             print(f"WARN: could not delete existing space ({e}); creating a new one.")
-    resp = w.genie.create_space(
-        warehouse_id=WAREHOUSE,
-        serialized_space=serialized_space,
-        title=TITLE,
-        description=DESCRIPTION,
-        parent_path=PARENT,
-    )
-    space_id = getattr(resp, "space_id", None) or getattr(resp, "id", None) or (
-        resp.get("space_id") if isinstance(resp, dict) else None)
+    resp = create_space()
+    space_id = resp.get("space_id") or resp.get("id") or (resp.get("space") or {}).get("space_id")
     print(f"Created Genie space: {space_id}")
+    if not space_id:
+        print("WARN: create returned no space_id; full response:", json.dumps(resp)[:500])
 
 # COMMAND ----------
 
