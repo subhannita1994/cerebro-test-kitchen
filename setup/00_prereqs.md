@@ -42,9 +42,15 @@ not deploy to separate workspaces.
 - [ ] A **workshop group** (e.g. `cerebro-workshop`) containing all participants.
 - [ ] On each of the four catalogs, grant the group: `USE CATALOG`, `USE SCHEMA`, `CREATE SCHEMA`, `CREATE TABLE`, `CREATE FUNCTION`, `CREATE VOLUME`, `SELECT`, `EXECUTE` (or `ALL PRIVILEGES` for the workshop). Details in setup/01.
 - [ ] `CAN_USE` on the serverless SQL warehouse for the group.
-- [ ] **Two persona service principals** (Analyst = less privileged, Manager = full) — mirrors real Cerebro's per-persona UC enforcement. Create the SPs, put their OAuth `client_id`/`client_secret` in a **secret scope** (default name `cerebro_demo`), and grant the app SP + participants `READ` on the scope. (You can start single-persona and add the second later.)
-- [ ] The **app service principal** needs `USE`/`SELECT`/`EXECUTE` on the customer catalog(s) and — for Customer C — `CREATE` on the Lakebase instance so it owns the chat/watchlist tables.
-- [ ] **CAN QUERY** (or membership that grants it) on the Unity AI Gateway model service, for the persona SPs.
+- [ ] **Two persona service principals** (Analyst = less privileged, Manager = full) — mirrors real Cerebro's per-persona UC enforcement. Create the SPs and put their OAuth `client_id`/`client_secret` in a **secret scope** (default name `cerebro_demo`). (You can start single-persona and add the second later.)
+- [ ] Grant each persona SP the UC access you want to **demonstrate** on the customer catalogs (analyst = a restricted subset; manager = full) so the per-persona difference is visible.
+
+> **Grants that are NOT prerequisites (they happen after deploy).** The **app's own
+> service principal** doesn't exist until the app is deployed, and the **Gateway
+> model** doesn't exist until you create it — so grants that target them can't be
+> done up front. These belong to app setup, not here: the app SP's secret-scope
+> `READ` + catalog `USE`/`SELECT`/`EXECUTE` + Lakebase access, and the persona SPs'
+> `CAN QUERY` on the model. See **setup/03 → "Grant the service principals (post-deploy)"**.
 
 ### Source-control
 - [ ] A Git repo (GitHub or Azure DevOps) holding this starter repo, with the three customer variations tracked (branches or the `config/` + `ddl/variants/` + `pipeline_variant` mechanism in this repo). **No GitHub Actions are required** — DDL artifacts are applied per-catalog by the `apply_ddl` job.

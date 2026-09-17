@@ -43,17 +43,31 @@ SELECT * FROM cerebro_dev.gold.f_market_share('Breads','Midwest','2026-08');
 
 - **Genie space** over `cerebro_dev.gold` — use `genie/genie_space.md` for the
   instructions, sample questions, and certified answers. Copy the space ID into
-  `databricks.yml` (`genie_space_id`).
+  the customer's `src/app/config/<customer>.yaml` (`genie_space_id`).
 - **Unity AI Gateway model service** fronting Databricks-hosted Claude Sonnet —
   create it as a UC model service (the GA AI Gateway, not legacy serving). Copy
-  its FQN into `databricks.yml` (`claude_model`). The app calls
+  its FQN into `src/app/config/<customer>.yaml` (`claude_model`). The app calls
   `POST {host}/ai-gateway/mlflow/v1/chat/completions` with this model.
+- Grant the **persona SPs `CAN QUERY`** on this model service (they couldn't be
+  granted earlier — the model didn't exist until now).
 
-## 4. Smoke-test the app
+## 4. Grant the service principals (post-deploy)
 
-```bash
-databricks bundle run --help    # (apps deploy as part of `bundle deploy`)
-```
+The app's service principal is **created when the app is deployed** (step 1), so
+its grants happen here, not in prerequisites. **This repeats per app** — each
+target (`dev`, `customer_a/b/c`) is its own app `cerebro-assistant-<slug>` with its
+own SP. For the app you just deployed:
+
+- **Secret scope** — the app SP mints persona tokens, so it needs to read the scope:
+  ```bash
+  databricks secrets put-acl cerebro_demo <app-sp-id> READ
+  ```
+  (Find the app SP via the Apps UI → the app → "App resources"/permissions, or `databricks apps get cerebro-assistant-dev`.)
+- **Unity Catalog** — grant the app SP `USE CATALOG`, `USE SCHEMA`, `SELECT`, `EXECUTE` on the customer catalog (it runs the UC-function tools + writes the turn log).
+- **Warehouse & Lakebase** are already handled: they're declared as **app resources** in `resources/app.yml`, so the bundle grants the app SP access to them on deploy. (You could automate the secret grant the same way by adding a `secret` app resource — see deploy-notes.)
+
+## 5. Smoke-test the app
+
 Open the app URL (from the Apps UI or `databricks apps list`). Try:
 - "hello" → answers directly (no tool).
 - "what's our market share for Breads in the Midwest last month?" → calls **get_market_share** (UC function).
