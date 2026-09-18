@@ -1,0 +1,36 @@
+# =============================================================================
+# resources/governance.yml — post-deploy grants (ALL customers)
+# -----------------------------------------------------------------------------
+# Included by databricks.yml. Grants the DEPLOYED app's service principal its
+# runtime access — so the whole thing is coded through DABs, no manual clicks:
+#   * READ on the persona secret scope (${var.secret_scope}) — mint persona tokens
+#   * USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE on
+#     ${var.catalog} — SELECT/EXECUTE run the UC-function tools; MODIFY + CREATE
+#     TABLE let it write gold.agent_turn_log (tracing.py self-creates it, then
+#     INSERTs). Least-privilege alt: pre-create agent_turn_log in apply_ddl and
+#     drop CREATE TABLE here (app SP then needs only MODIFY on it).
+#
+# The app SP only exists AFTER `bundle deploy`, so run this LAST:
+#   deploy -> apply_ddl -> seed_data -> run_pipeline -> register_functions
+#          -> setup_lakebase -> create_genie_space -> grant_app_sp
+# Idempotent (GRANT + put_acl upsert). Run AS a principal with MANAGE on the scope
+# and owner/MANAGE GRANT on the catalog (the workshop organizer/admin).
+#
+# NOTE: the app's warehouse + Lakebase access are granted declaratively by the app
+# `resources` block in resources/app.yml — not here.
+# =============================================================================
+
+resources:
+  jobs:
+
+    grant_app_sp:
+      name: "[${bundle.target}] cerebro grant_app_sp (${var.catalog})"
+      tasks:
+        - task_key: grant_app_sp
+          notebook_task:
+            notebook_path: ../src/governance/grant_app_sp.py
+            base_parameters:
+              catalog: ${var.catalog}
+              customer_slug: ${var.customer_slug}
+              secret_scope: ${var.secret_scope}
+              app_name: ""     # blank => cerebro-assistant-${var.customer_slug}

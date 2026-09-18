@@ -74,20 +74,29 @@ Then wire `src/app/config/dev.yaml`:
   `ai` → the model → Permissions), and enrich the Genie space in the UI per
   `genie/genie_space.md` (trusted functions, synonyms, benchmarks).
 
-## 4. Grant the service principals (post-deploy)
+## 4. Grant the app service principal (post-deploy, via DABs)
 
 The app's service principal is **created when the app is deployed** (step 1), so
-its grants happen here, not in prerequisites. **This repeats per app** — each
-target (`dev`, `customer_a/b/c`) is its own app `cerebro-assistant-<slug>` with its
-own SP. For the app you just deployed:
+its grants happen here — coded as the **`grant_app_sp` job**, not manual clicks:
 
-- **Secret scope** — the app SP mints persona tokens, so it needs to read the scope:
-  ```bash
-  databricks secrets put-acl cerebro_demo <app-sp-id> READ
-  ```
-  (Find the app SP via the Apps UI → the app → "App resources"/permissions, or `databricks apps get cerebro-assistant-dev`.)
-- **Unity Catalog** — grant the app SP `USE CATALOG`, `USE SCHEMA`, `SELECT`, `EXECUTE` on the customer catalog (it runs the UC-function tools + writes the turn log).
-- **Warehouse & Lakebase** are already handled: they're declared as **app resources** in `resources/app.yml`, so the bundle grants the app SP access to them on deploy. (You could automate the secret grant the same way by adding a `secret` app resource — see deploy-notes.)
+```bash
+databricks bundle run grant_app_sp -t dev
+```
+
+It looks up the deployed app's SP and grants it **`READ`** on the secret scope +
+**`USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE`** on the catalog
+(SELECT/EXECUTE run the tools; MODIFY + CREATE TABLE write `gold.agent_turn_log`).
+Run it **as a principal with MANAGE on the scope and owner/MANAGE GRANT on the
+catalog** (the organizer/admin). Idempotent; **repeats per app** (`dev`, `customer_a/b/c`).
+**Warehouse + Lakebase** access is NOT here — it's granted declaratively by the app
+`resources` block in `resources/app.yml` at deploy.
+
+> **Lakebase chat tables:** you do **not** create these here. The app creates its
+> own `users`/`threads`/`messages`/`agent_state` (and Customer-C `watchlist`) at
+> startup via `state.init_schema()` — and the app runs **as the app SP**, so they're
+> owned correctly. `setup_lakebase` (step earlier) runs as *you*, so use it only for
+> the Customer-C **synced table**; if you let it create the chat tables while running
+> as yourself, they'd be owned by your role, not the app SP.
 
 ## 5. Smoke-test the app
 
