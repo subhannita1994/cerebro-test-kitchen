@@ -38,7 +38,6 @@ resources:
               customer_slug: ${var.customer_slug}
               secret_scope: ${var.secret_scope}
               warehouse_id: ${var.warehouse_id}
-              claude_model: "system.ai.claude-sonnet-4-5"
               genie_space_id: ""     # blank => read from src/app/config/<customer>.yaml
               app_name: ""           # blank => cerebro-assistant-${var.customer_slug}
               analyst_sp_name: "cerebro-persona-analyst"

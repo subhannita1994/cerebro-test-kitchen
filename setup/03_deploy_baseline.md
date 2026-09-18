@@ -65,8 +65,11 @@ databricks bundle run create_genie_space -t dev
 
 Then wire `src/app/config/dev.yaml`:
 - `genie_space_id:` → the id the job printed.
-- `claude_model: system.ai.claude-sonnet-4-5` → the ready-to-use **Unity AI
-  Gateway** FQN. Nothing to create; the app calls
+- `claude_model: system.ai.databricks-claude-sonnet-4-5` → the ready-to-use
+  **Unity AI Gateway** FQN (every `system.ai` model carries the `databricks-`
+  prefix — confirm the exact name in Catalog Explorer → system → ai). `system.ai`
+  already grants EXECUTE to "All account users", so no grant is needed. Nothing to
+  create; the app calls
   `POST {host}/ai-gateway/mlflow/v1/chat/completions` with this model. (Only build
   your *own* model service if you want a dedicated inference table / guardrails —
   that's the Module 4 governance exercise.)
@@ -85,10 +88,10 @@ databricks bundle run grant_service_principals -t dev
 
 It grants both the **app SP** and the two **persona SPs**:
 - **App SP:** `READ` on the secret scope + `USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE` on the catalog (tools + write `gold.agent_turn_log`).
-- **Persona SPs** (the model / Genie / UC-function calls run *as* these): `EXECUTE` on the `system.ai` Gateway model, warehouse `CAN_USE`, Genie-space `CAN_RUN` (best-effort via API; manual fallback logged), and catalog data — **manager = full, analyst = restricted** (analyst gets `sales_daily`/`market_share` + `f_market_share` but NOT the promo table/function, so a promo question to the analyst is denied by UC — the per-persona enforcement demo).
+- **Persona SPs** (the Genie / UC-function calls run *as* these): warehouse `CAN_USE`, Genie-space `CAN_RUN` (best-effort via API; manual fallback logged), and catalog data — **manager = full, analyst = restricted** (analyst gets `sales_daily`/`market_share` + `f_market_share` but NOT the promo table/function, so a promo question to the analyst is denied by UC — the per-persona enforcement demo). **Model access is not granted here** — `system.ai` is Databricks-managed and already grants EXECUTE to "All account users"; you can't (and needn't) grant it.
 
-Run it **as a principal with MANAGE on the scope, owner/MANAGE GRANT on the
-catalog, and grant rights on `system.ai`** (the organizer/admin). Idempotent;
+Run it **as a principal with MANAGE on the scope and owner/MANAGE GRANT on the
+catalog** (the organizer/admin). Idempotent;
 **repeats per app** (`dev`, `customer_a/b/c`). The app's **warehouse + Lakebase**
 access is NOT here — it's granted declaratively by the app `resources` block in
 `resources/app.yml` at deploy.

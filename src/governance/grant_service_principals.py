@@ -10,8 +10,7 @@
 # MAGIC - `USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE` on the catalog
 # MAGIC   (SELECT/EXECUTE for tools; MODIFY + CREATE TABLE write `gold.agent_turn_log`)
 # MAGIC
-# MAGIC **Persona SPs** (the model / Genie / UC-function calls actually run AS these):
-# MAGIC - `system.ai` model `EXECUTE` (query Claude via the AI Gateway)
+# MAGIC **Persona SPs** (the Genie / UC-function calls actually run AS these):
 # MAGIC - SQL warehouse `CAN_USE` (functions + Genie execute here as the persona)
 # MAGIC - Genie space `CAN_RUN` (best-effort via API; manual fallback printed)
 # MAGIC - `cerebro_*` catalog data — **manager = full**, **analyst = restricted**
@@ -29,7 +28,6 @@ dbutils.widgets.text("catalog", "cerebro_dev", "Customer catalog")
 dbutils.widgets.dropdown("customer_slug", "dev", ["dev", "a", "b", "c"], "Customer slug")
 dbutils.widgets.text("secret_scope", "cerebro_demo", "Persona secret scope")
 dbutils.widgets.text("warehouse_id", "", "Serverless SQL warehouse ID")
-dbutils.widgets.text("claude_model", "system.ai.claude-sonnet-4-5", "Gateway model FQN")
 dbutils.widgets.text("genie_space_id", "", "Genie space id (blank => read from config)")
 dbutils.widgets.text("app_name", "", "App name override (blank => cerebro-assistant-<slug>)")
 dbutils.widgets.text("analyst_sp_name", "cerebro-persona-analyst", "Analyst persona SP display name")
@@ -39,7 +37,6 @@ CATALOG   = dbutils.widgets.get("catalog").strip()
 SLUG      = dbutils.widgets.get("customer_slug").strip().lower()
 SCOPE     = dbutils.widgets.get("secret_scope").strip()
 WAREHOUSE = dbutils.widgets.get("warehouse_id").strip()
-CLAUDE_MODEL = dbutils.widgets.get("claude_model").strip()
 GENIE_SPACE_ID = dbutils.widgets.get("genie_space_id").strip()
 APP_NAME  = dbutils.widgets.get("app_name").strip() or f"cerebro-assistant-{SLUG}"
 ANALYST_SP_NAME = dbutils.widgets.get("analyst_sp_name").strip()
@@ -123,18 +120,12 @@ grant_sql(
 # COMMAND ----------
 
 # --- 2. PERSONA SPs -----------------------------------------------------------
-# Shared: model EXECUTE + warehouse CAN_USE + Genie CAN_RUN. Data grants differ.
-def grant_model(sp: str, who: str):
-    parts = CLAUDE_MODEL.split(".")
-    if len(parts) != 3:
-        record(f"{who} -> model EXECUTE", "WARN",
-               f"claude_model '{CLAUDE_MODEL}' isn't a 3-level FQN; grant EXECUTE manually.")
-        return
-    mcat, mschema, mmodel = parts
-    grant_sql(f"GRANT USE CATALOG ON CATALOG {mcat} TO `{sp}`", f"{who} -> USE CATALOG {mcat}")
-    grant_sql(f"GRANT USE SCHEMA ON SCHEMA {mcat}.{mschema} TO `{sp}`", f"{who} -> USE SCHEMA {mcat}.{mschema}")
-    grant_sql(f"GRANT EXECUTE ON MODEL `{mcat}`.`{mschema}`.`{mmodel}` TO `{sp}`", f"{who} -> EXECUTE model")
-
+# Shared: warehouse CAN_USE + Genie CAN_RUN. Data grants differ per persona.
+# NOTE: we do NOT grant model access here. The Gateway model
+# system.ai.databricks-claude-sonnet-4-5 lives in the Databricks-managed `system`
+# catalog — you can't GRANT on it, and it already grants EXECUTE to "All account
+# users". If your SPs still can't query it, front it with your OWN model service
+# (a securable you own) and grant EXECUTE on that instead.
 def grant_warehouse(sp: str, who: str):
     if not WAREHOUSE:
         record(f"{who} -> warehouse CAN_USE", "WARN", "no warehouse_id provided")
@@ -162,7 +153,6 @@ def grant_genie(sp: str, who: str):
 
 # Manager = FULL data access.
 if MANAGER_SP:
-    grant_model(MANAGER_SP, "manager")
     grant_warehouse(MANAGER_SP, "manager")
     grant_genie(MANAGER_SP, "manager")
     grant_sql(f"GRANT USE CATALOG, USE SCHEMA, SELECT, EXECUTE ON CATALOG {CATALOG} TO `{MANAGER_SP}`",
@@ -171,7 +161,6 @@ if MANAGER_SP:
 # Analyst = RESTRICTED: only sales_daily + market_share + f_market_share (NO promo).
 # References only objects that exist in every variant, so it's safe for Customer B too.
 if ANALYST_SP:
-    grant_model(ANALYST_SP, "analyst")
     grant_warehouse(ANALYST_SP, "analyst")
     grant_genie(ANALYST_SP, "analyst")
     grant_sql(f"GRANT USE CATALOG ON CATALOG {CATALOG} TO `{ANALYST_SP}`", "analyst -> USE CATALOG")
