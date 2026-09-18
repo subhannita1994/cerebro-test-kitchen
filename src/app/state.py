@@ -42,6 +42,13 @@ DB_INSTANCE = cfg.lakebase_instance()                # for credential minting
 # Postgres role = the app's own service principal. The Apps runtime injects its
 # client id as DATABRICKS_CLIENT_ID; allow an explicit override via LAKEBASE_USER.
 DB_USER = os.environ.get("LAKEBASE_USER") or os.environ["DATABRICKS_CLIENT_ID"]
+# The app SP can't CREATE in the locked-down `public` schema, so the app uses its
+# OWN schema — named after the catalog, so the four apps sharing one Lakebase
+# instance stay isolated (cerebro_dev / cerebro_a / ...). The app SP CREATEs it
+# (via the database's CAN_CONNECT_AND_CREATE grant) and therefore OWNS it. Every
+# connection sets search_path here, so unqualified table names resolve to it
+# (falling back to `public` for the Customer-C synced snapshot).
+APP_SCHEMA = os.environ.get("LAKEBASE_SCHEMA") or cfg.catalog()
 
 _w = WorkspaceClient()
 _cred_lock = threading.Lock()
@@ -66,6 +73,7 @@ def _connect() -> psycopg.Connection:
     return psycopg.connect(
         host=DB_HOST, dbname=DB_NAME, user=DB_USER, password=_password(),
         sslmode="require", autocommit=True,
+        options=f"-c search_path={APP_SCHEMA},public",
     )
 
 
@@ -84,6 +92,9 @@ DEMO_USERS = [
 def init_schema() -> None:
     """Create the chat-memory tables (all customers) and seed demo logins."""
     with _connect() as c, c.cursor() as cur:
+        # Create the app-owned schema first (public is locked down). search_path
+        # already points here, so the unqualified tables below land in it.
+        cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{APP_SCHEMA}"')
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
