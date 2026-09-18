@@ -30,7 +30,10 @@ import customer_config as cfg
 
 log = logging.getLogger("cerebro.tracing")
 
-DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
+# The Apps runtime injects DATABRICKS_HOST as a bare hostname (no scheme); make
+# sure it has https:// for the SQL Statement Execution API URL.
+_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
+DATABRICKS_HOST = _HOST if _HOST.startswith("http") else f"https://{_HOST}"
 WAREHOUSE_ID = os.environ["WAREHOUSE_ID"]                 # app.yaml valueFrom sql-warehouse
 CATALOG = cfg.catalog()                                  # from the bundled customer config
 # App-owned analytics table in the customer's catalog. Override with an explicit

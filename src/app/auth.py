@@ -26,7 +26,10 @@ import requests
 from databricks.sdk import WorkspaceClient
 
 # --- config (endpoint IDs are non-secret; creds come from the secret scope) ---
-DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
+# The Apps runtime injects DATABRICKS_HOST as a bare hostname (no scheme); make
+# sure it has https:// so requests to it build valid URLs.
+_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
+DATABRICKS_HOST = _HOST if _HOST.startswith("http") else f"https://{_HOST}"
 # SECRET_SCOPE is mapped from ${var.secret_scope} by app.yaml; keep the legacy
 # CEREBRO_SECRET_SCOPE name as a fallback for the reference app's env.
 SECRET_SCOPE = os.environ.get("SECRET_SCOPE") or os.environ.get("CEREBRO_SECRET_SCOPE", "cerebro_demo")

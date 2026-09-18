@@ -23,7 +23,10 @@ from agent import Agent
 
 st.set_page_config(page_title="Cerebro Assistant", page_icon="🥐", layout="wide")
 
-DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
+# The Apps runtime injects DATABRICKS_HOST as a bare hostname (no scheme); make
+# sure it has https:// (feeds the agent -> gateway/genie/tool URLs).
+_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
+DATABRICKS_HOST = _HOST if _HOST.startswith("http") else f"https://{_HOST}"
 CATALOG = cfg.catalog()
 ENABLE_LAKEBASE_SERVING = cfg.enable_lakebase_serving()
 
