@@ -98,9 +98,21 @@ catalog** (the organizer/admin). Idempotent; **repeats per app** (`dev`, `custom
 > the Customer-C **synced table**; if you let it create the chat tables while running
 > as yourself, they'd be owned by your role, not the app SP.
 
-## 5. Smoke-test the app
+## 5. Start the app, then smoke-test it
 
-Open the app URL (from the Apps UI or `databricks apps list`). Try:
+`bundle deploy` only **creates** the app and syncs its source — it does not start
+it. Deploy (start) the app's code from the bundle with:
+
+```bash
+databricks bundle run cerebro_assistant -t dev
+```
+
+`cerebro_assistant` is the app resource key (`resources/app.yml`); this deploys
+from `source_code_path: src/app` and starts the app — **do not** use the Apps-UI
+"Deploy" button (it prompts you to attach source because it doesn't know the
+bundle's path). Re-run this command whenever you change app code or `dev.yaml`.
+
+Then open the app URL (from the Apps UI or `databricks apps list`). Try:
 - "hello" → answers directly (no tool).
 - "what's our market share for Breads in the Midwest last month?" → calls **get_market_share** (UC function).
 - "how did promo PROMO123 lift sales for product X?" → calls **get_promo_lift**.
