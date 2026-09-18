@@ -74,22 +74,24 @@ Then wire `src/app/config/dev.yaml`:
   `ai` → the model → Permissions), and enrich the Genie space in the UI per
   `genie/genie_space.md` (trusted functions, synonyms, benchmarks).
 
-## 4. Grant the app service principal (post-deploy, via DABs)
+## 4. Grant the service principals (post-deploy, via DABs)
 
-The app's service principal is **created when the app is deployed** (step 1), so
-its grants happen here — coded as the **`grant_app_sp` job**, not manual clicks:
+The app SP is **created when the app is deployed** (step 1), so all SP grants
+happen here — coded as the **`grant_service_principals` job**, not manual clicks:
 
 ```bash
-databricks bundle run grant_app_sp -t dev
+databricks bundle run grant_service_principals -t dev
 ```
 
-It looks up the deployed app's SP and grants it **`READ`** on the secret scope +
-**`USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE`** on the catalog
-(SELECT/EXECUTE run the tools; MODIFY + CREATE TABLE write `gold.agent_turn_log`).
-Run it **as a principal with MANAGE on the scope and owner/MANAGE GRANT on the
-catalog** (the organizer/admin). Idempotent; **repeats per app** (`dev`, `customer_a/b/c`).
-**Warehouse + Lakebase** access is NOT here — it's granted declaratively by the app
-`resources` block in `resources/app.yml` at deploy.
+It grants both the **app SP** and the two **persona SPs**:
+- **App SP:** `READ` on the secret scope + `USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE` on the catalog (tools + write `gold.agent_turn_log`).
+- **Persona SPs** (the model / Genie / UC-function calls run *as* these): `EXECUTE` on the `system.ai` Gateway model, warehouse `CAN_USE`, Genie-space `CAN_RUN` (best-effort via API; manual fallback logged), and catalog data — **manager = full, analyst = restricted** (analyst gets `sales_daily`/`market_share` + `f_market_share` but NOT the promo table/function, so a promo question to the analyst is denied by UC — the per-persona enforcement demo).
+
+Run it **as a principal with MANAGE on the scope, owner/MANAGE GRANT on the
+catalog, and grant rights on `system.ai`** (the organizer/admin). Idempotent;
+**repeats per app** (`dev`, `customer_a/b/c`). The app's **warehouse + Lakebase**
+access is NOT here — it's granted declaratively by the app `resources` block in
+`resources/app.yml` at deploy.
 
 > **Lakebase chat tables:** you do **not** create these here. The app creates its
 > own `users`/`threads`/`messages`/`agent_state` (and Customer-C `watchlist`) at

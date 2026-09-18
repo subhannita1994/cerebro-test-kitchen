@@ -1,20 +1,24 @@
 # =============================================================================
 # resources/governance.yml — post-deploy grants (ALL customers)
 # -----------------------------------------------------------------------------
-# Included by databricks.yml. Grants the DEPLOYED app's service principal its
+# Included by databricks.yml. Grants BOTH the app SP and the persona SPs their
 # runtime access — so the whole thing is coded through DABs, no manual clicks:
-#   * READ on the persona secret scope (${var.secret_scope}) — mint persona tokens
-#   * USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE on
-#     ${var.catalog} — SELECT/EXECUTE run the UC-function tools; MODIFY + CREATE
-#     TABLE let it write gold.agent_turn_log (tracing.py self-creates it, then
-#     INSERTs). Least-privilege alt: pre-create agent_turn_log in apply_ddl and
-#     drop CREATE TABLE here (app SP then needs only MODIFY on it).
+#   App SP:
+#     * READ on the persona secret scope (${var.secret_scope})
+#     * USE CATALOG, USE SCHEMA, SELECT, EXECUTE, MODIFY, CREATE TABLE on
+#       ${var.catalog}  (tools + write gold.agent_turn_log)
+#   Persona SPs (the model / Genie / UC-function calls run AS these):
+#     * EXECUTE on the system.ai Gateway model (${var.claude_model})
+#     * CAN_USE on the SQL warehouse (${var.warehouse_id})
+#     * CAN_RUN on the Genie space (best-effort via API; manual fallback logged)
+#     * catalog data: MANAGER = full; ANALYST = restricted (no promo) — the
+#       per-persona UC-enforcement demo.
 #
 # The app SP only exists AFTER `bundle deploy`, so run this LAST:
 #   deploy -> apply_ddl -> seed_data -> run_pipeline -> register_functions
-#          -> setup_lakebase -> create_genie_space -> grant_app_sp
-# Idempotent (GRANT + put_acl upsert). Run AS a principal with MANAGE on the scope
-# and owner/MANAGE GRANT on the catalog (the workshop organizer/admin).
+#          -> setup_lakebase -> create_genie_space -> grant_service_principals
+# Idempotent. Run AS a principal with MANAGE on the scope, owner/MANAGE GRANT on
+# the catalog, and grant rights on system.ai (the organizer/admin).
 #
 # NOTE: the app's warehouse + Lakebase access are granted declaratively by the app
 # `resources` block in resources/app.yml — not here.
@@ -23,14 +27,19 @@
 resources:
   jobs:
 
-    grant_app_sp:
-      name: "[${bundle.target}] cerebro grant_app_sp (${var.catalog})"
+    grant_service_principals:
+      name: "[${bundle.target}] cerebro grant_service_principals (${var.catalog})"
       tasks:
-        - task_key: grant_app_sp
+        - task_key: grant_service_principals
           notebook_task:
-            notebook_path: ../src/governance/grant_app_sp.py
+            notebook_path: ../src/governance/grant_service_principals.py
             base_parameters:
               catalog: ${var.catalog}
               customer_slug: ${var.customer_slug}
               secret_scope: ${var.secret_scope}
-              app_name: ""     # blank => cerebro-assistant-${var.customer_slug}
+              warehouse_id: ${var.warehouse_id}
+              claude_model: "system.ai.claude-sonnet-4-5"
+              genie_space_id: ""     # blank => read from src/app/config/<customer>.yaml
+              app_name: ""           # blank => cerebro-assistant-${var.customer_slug}
+              analyst_sp_name: "cerebro-persona-analyst"
+              manager_sp_name: "cerebro-persona-manager"
